@@ -99,7 +99,7 @@ public class Scanner {
 				stream.comments.add((Token) t);
 			} else
 				stream.tokens.add(t);
-			System.out.println(t);
+			// System.out.println(t);
 		} while (!t.kind.equals(EOF));
 	}
 
@@ -334,11 +334,8 @@ public class Scanner {
 					// The input has ended before reaching the ending
 					// double-quote
 					else
-						throw stream.new LexicalException(
-								begin,
-								"The ending-double-quote is missing - "
-										+ new String(stream.inputChars,
-												begin - 1, scannedTillThisIndex));
+						throw stream.new LexicalException(begin,
+								"The ending-double-quote is missing");
 				}
 				toBeReturned = stream.new Token(STRING_LIT, begin,
 						scannedTillThisIndex);
@@ -358,11 +355,31 @@ public class Scanner {
 						ch = stream.inputChars[++scannedTillThisIndex];
 					else {
 						// This index has now reached the end of the input
-						// stream. So break out of this loop 
+						// stream. So break out of this loop
 						++scannedTillThisIndex;
 						break;
-//						toBeReturned = stream.new Token(IDENT, begin, scannedTillThisIndex + 1);
-//						return toBeReturned;
+						// toBeReturned = stream.new Token(IDENT, begin,
+						// scannedTillThisIndex + 1);
+						// return toBeReturned;
+
+						// So check if it's a BOOLEAN_LIT or KEYWORD or IDENT
+						// and return this token as a token of that kind.
+						// String thisToken = new String(stream.inputChars,
+						// begin,
+						// (scannedTillThisIndex + 1 - begin));
+						// if (thisToken.equals("true") ||
+						// thisToken.equals("false"))
+						// toBeReturned = stream.new Token(BOOLEAN_LIT, begin,
+						// scannedTillThisIndex + 1);
+						// else if (keywordsHashMap.containsKey(thisToken))
+						// toBeReturned = stream.new Token(
+						// keywordsHashMap.get(thisToken), begin,
+						// scannedTillThisIndex + 1);
+						// // This token is an IDENT.
+						// else
+						// toBeReturned = stream.new Token(IDENT, begin,
+						// scannedTillThisIndex + 1);
+						// return toBeReturned;
 					}
 				} while (Character.isJavaIdentifierPart(ch));
 				// The latest 'ch' was not a part of an IDENT.
