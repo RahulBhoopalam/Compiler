@@ -97,6 +97,19 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 		mv.visitLabel(start);
 		mv.visitLineNumber(program.ident.getLineNumber(), start);
 
+		// visit 'x' and 'y' as local variables.
+		mv.visitIntInsn(BIPUSH, 0);
+		mv.visitVarInsn(ISTORE, 1);
+		Label xLabel = new Label();
+		mv.visitLabel(xLabel);
+		mv.visitLineNumber(program.ident.getLineNumber(), start);
+
+		mv.visitIntInsn(BIPUSH, 0);
+		mv.visitVarInsn(ISTORE, 2);
+		Label yLabel = new Label();
+		mv.visitLabel(yLabel);
+		mv.visitLineNumber(program.ident.getLineNumber(), start);
+
 		// visit children
 		for (Dec dec : program.decList) {
 			dec.visit(this, mv);
@@ -116,10 +129,11 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 		mv.visitLocalVariable("args", "[Ljava/lang/String;", null, start, end,
 				getSlot("args"));
 		// if there are any more local variables, visit them now.
-		// ......
+		mv.visitLocalVariable("x", "I", null, xLabel, end, 1);
+		mv.visitLocalVariable("y", "I", null, yLabel, end, 2);
 
 		// finish up method
-		mv.visitMaxs(1, 1);
+		mv.visitMaxs(1, 3);
 		mv.visitEnd();
 		// convert to bytearray and return
 		return cw.toByteArray();
@@ -128,10 +142,32 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 	@Override
 	public Object visitAlternativeStmt(AlternativeStmt alternativeStmt,
 			Object arg) throws Exception {
-		System.out.println("visiting unimplemented visit method"); // TODO
-		// Auto-generated
-		// method
-		// stub
+		// if ( Expr ) { Stmt *}
+		// | if ( Expr ) { Stmt* } else { Stmt* }
+		MethodVisitor mv = (MethodVisitor) arg;
+
+		// Step 1:
+		// Visit Expr to generate code to leave its value on top of the stack.
+		alternativeStmt.expr.visit(this, mv);
+
+		// Step 2:
+		// IFEQ elseLabel
+		// visit statements in ifStmtmList
+		// GOTO endOfAlternativeLabel
+		// elseLabel:
+		// visit statements in elseStmtList
+		// endOfAlternativeLabel:
+		Label elseLabel = new Label();
+		mv.visitJumpInsn(IFEQ, elseLabel);
+		for (Stmt stmt : alternativeStmt.ifStmtList)
+			stmt.visit(this, mv);
+		Label endOfAlternativeLabel = new Label();
+		mv.visitJumpInsn(GOTO, endOfAlternativeLabel);
+		mv.visitLabel(elseLabel);
+		for (Stmt stmt : alternativeStmt.elseStmtList)
+			stmt.visit(this, mv);
+		mv.visitLabel(endOfAlternativeLabel);
+
 		return null;
 	}
 
@@ -155,20 +191,123 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 	@Override
 	public Object visitIterationStmt(IterationStmt iterationStmt, Object arg)
 			throws Exception {
-		System.out.println("visiting unimplemented visit method"); // TODO
-																	// Auto-generated
-																	// method
-																	// stub
+		// while ( Expr ) { Stmt* }
+		MethodVisitor mv = (MethodVisitor) arg;
+
+		// GOTO guardLabel
+		// bodyLabel:
+		// visit statements in stmtList
+		// guardLabel:
+		// visit expr to generate code to leave its value on top of the stack
+		// IFNE bodyLabel
+		Label guardLabel = new Label();
+		mv.visitJumpInsn(GOTO, guardLabel);
+		Label bodyLabel = new Label();
+		mv.visitLabel(bodyLabel);
+		for (Stmt stmt : iterationStmt.stmtList)
+			stmt.visit(this, mv);
+		mv.visitLabel(guardLabel);
+		iterationStmt.expr.visit(this, mv);
+		mv.visitJumpInsn(IFNE, bodyLabel);
+
 		return null;
 	}
 
 	@Override
 	public Object visitAssignPixelStmt(AssignPixelStmt assignPixelStmt,
 			Object arg) throws Exception {
-		System.out.println("visiting unimplemented visit method"); // TODO
-																	// Auto-generated
-																	// method
-																	// stub
+		// IDENT = Pixel ;
+		MethodVisitor mv = (MethodVisitor) arg;
+
+		// TypeOf(lhs) = 'pixel' or 'image' ?
+		String nameOfLhsIdent = assignPixelStmt.lhsIdent.getText();
+		if (varTypeMap.get(nameOfLhsIdent).equals(typeMap.get(pixel))) {
+			// Step 1.
+			// Visit pixel to generate code to leave pixel value on stack top.
+			assignPixelStmt.pixel.visit(this, mv);
+			// Step 2. Store in pixel indicated by lhs
+			// i.e. Set IDENT's value to be the value on the stack's top.
+			mv.visitFieldInsn(PUTSTATIC, progName, nameOfLhsIdent,
+					varTypeMap.get(nameOfLhsIdent));
+		}
+		else if (varTypeMap.get(nameOfLhsIdent).equals(typeMap.get(image))) {
+			// Loop implicitly over x and y.
+			// ud = {{ cfl[X-x, Y-y]red, cfl[X-x,Y-y]green, cfl[X-x, Y-y]blue
+			// }};
+			// is equivalent to
+			// --------------------------------------------------------
+			// x = 0; 
+			// while (x < ud.width) {
+			// y = 0; 
+			// while (y < ud.height) {
+			// ud[x,y] = {{ cfl[X-x, Y-y]red, cfl[X-x, Y-y]green, cfl[X-x,
+			// Y-y]blue }};
+			// ++y;
+			// }
+			// ++x
+			// }
+			// update the frame
+			// --------------------------------------------------------			
+			String imageName = nameOfLhsIdent;
+			// Step 1:
+			// Generate Bytecode for the beginning of the two loops.
+			mv.visitInsn(ICONST_0);
+			mv.visitVarInsn(ISTORE, 1); // x = 0
+			Label guardLabelLoop1 = new Label();
+			mv.visitJumpInsn(GOTO, guardLabelLoop1);
+			
+			Label bodyLabelLoop1 = new Label();
+			mv.visitLabel(bodyLabelLoop1);
+			mv.visitInsn(ICONST_0);
+			mv.visitVarInsn(ISTORE, 2); // y = 0
+			Label guardLabelLoop2 = new Label();
+			mv.visitJumpInsn(GOTO, guardLabelLoop2);
+			
+			Label bodyLabelLoop2 = new Label();
+			mv.visitLabel(bodyLabelLoop2);
+			// Step 2: Generate code to execute the statement inside the loops.
+			// a) leave the address of the image on the stack top.			
+			mv.visitFieldInsn(GETSTATIC, progName, imageName,
+					PLPImage.classDesc);
+			// b) Place the values of 'x' and 'y' on the stack top.
+			mv.visitVarInsn(ILOAD, 1);
+			mv.visitVarInsn(ILOAD, 2);
+			// c) Visit the Pixel to generate code to pack it into an integer.
+			assignPixelStmt.pixel.visit(this, mv);
+			// d) Invoke IDENT.setPixel(x, y, newPixel)
+			mv.visitMethodInsn(INVOKEVIRTUAL, PLPImage.className, "setPixel",
+					PLPImageExtension.setPixelDesc);
+
+			mv.visitIincInsn(2, 1); // ++y
+
+			// Step 3: Generate code for closing the inner loop.
+			// ( y < lhsImage.height )
+			mv.visitLabel(guardLabelLoop2);
+			mv.visitVarInsn(ILOAD, 2);
+			mv.visitFieldInsn(GETSTATIC, progName, imageName,
+					typeMap.get(image));
+			mv.visitFieldInsn(GETFIELD, PLPImage.className, "height", "I");
+			mv.visitJumpInsn(IF_ICMPLT, bodyLabelLoop2);
+
+			mv.visitIincInsn(1, 1); // ++x
+
+			// Step 4: Generate code for closing the outer loop.
+			// ( x < lhsImage.width )
+			mv.visitLabel(guardLabelLoop1);
+			mv.visitVarInsn(ILOAD, 1);
+			mv.visitFieldInsn(GETSTATIC, progName, imageName,
+					typeMap.get(image));
+			mv.visitFieldInsn(GETFIELD, PLPImage.className, "width", "I");
+			mv.visitJumpInsn(IF_ICMPLT, bodyLabelLoop1);
+
+			// Step 5: Have exited from the loops. 
+			// So invoke the image’s updateFrame() method.
+			mv.visitFieldInsn(GETSTATIC, progName, imageName,
+					typeMap.get(image));
+			mv.visitMethodInsn(INVOKEVIRTUAL, PLPImage.className,
+					"updateFrame", PLPImage.updateFrameDesc);
+		}
+
 		return null;
 	}
 
@@ -235,6 +374,8 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 		// Generate code to leave the address of the image on the stack top.
 		String imageName = singleSampleAssignmentStmt.lhsIdent.getText();
 		mv.visitFieldInsn(GETSTATIC, progName, imageName, PLPImage.classDesc);
+		// Duplicate once for invoking updateFrame()
+		mv.visitInsn(DUP);
 
 		// Step 2:
 		// Visit the expressions and leave their values on the stack top.
@@ -257,6 +398,12 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 		// indicated image.
 		mv.visitMethodInsn(INVOKEVIRTUAL, PLPImage.className, "setSample",
 				PLPImageExtension.setSampleDesc);
+
+		// Step 4: Invoke the image’s updateFrame method.
+		// [consumes the copy of image's address]
+		mv.visitMethodInsn(INVOKEVIRTUAL, PLPImage.className, "updateFrame",
+				PLPImage.updateFrameDesc);
+
 		return null;
 	}
 
@@ -383,10 +530,31 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 	@Override
 	public Object visitConditionalExpr(ConditionalExpr conditionalExpr,
 			Object arg) throws Exception {
-		System.out.println("visiting unimplemented visit method"); // TODO
-																	// Auto-generated
-																	// method
-																	// stub
+		// Expr ? Expr : Expr
+		// condition ? trueValue : falseValue
+		MethodVisitor mv = (MethodVisitor) arg;
+
+		// Step 1: Visit 'condition' to generate code to leave value of
+		// condition on top of the stack.
+		conditionalExpr.condition.visit(this, mv);
+
+		// Step 2:
+		// IFEQ falseConditionLabel
+		// visit trueValue => generate code to leave the value on stack top.
+		// GOTO endOfExprLabel
+		// falseConditionLabel:
+		// visit falseValue to generate code to leave the value on stack top.
+		// endOfExprLabel:
+
+		Label falseCondLabel = new Label();
+		mv.visitJumpInsn(IFEQ, falseCondLabel);
+		conditionalExpr.trueValue.visit(this, mv);
+		Label endOfExprLabel = new Label();
+		mv.visitJumpInsn(GOTO, endOfExprLabel);
+		mv.visitLabel(falseCondLabel);
+		conditionalExpr.falseValue.visit(this, mv);
+		mv.visitLabel(endOfExprLabel);
+
 		return null;
 	}
 
@@ -394,7 +562,6 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 	public Object visitBinaryExpr(BinaryExpr binaryExpr, Object arg)
 			throws Exception {
 		// Expr1 OP Expr2
-
 		MethodVisitor mv = (MethodVisitor) arg;
 
 		// Step 1: Visit the expressions to leave their values on top of
@@ -402,10 +569,10 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 		binaryExpr.e0.visit(this, mv);
 		binaryExpr.e1.visit(this, mv);
 
-		// Step 2: Evaluate e0 and e1 for these operators on ints:
-		// +,-,*,/,%,<<, >>
-		// and leave the result on top of the stack.
+		// Step 2: Evaluate e0 and e1 and leave the result on top of the stack.
 		switch (binaryExpr.op.kind) {
+		// a) for int operators:
+		// +,-,*,/,%,<<,>>
 		case PLUS:
 			mv.visitInsn(IADD);
 			break;
@@ -427,6 +594,87 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 		case RSHIFT:
 			mv.visitInsn(ISHR);
 			break;
+		// b) for boolean operators:
+		// &,|,==,!=,<,>,<=,>=,?:
+		case AND:
+			// TypeCheckVisitor allows only 'boolean' operands.
+			mv.visitMethodInsn(INVOKESTATIC,
+					cop5555fa13.runtime.BooleanOperatorsImpl.JVMClassName,
+					"and", cop5555fa13.runtime.BooleanOperatorsImpl.andSig);
+			break;
+		case OR:
+			// TypeCheckVisitor allows only 'boolean' operands.
+			mv.visitMethodInsn(INVOKESTATIC,
+					cop5555fa13.runtime.BooleanOperatorsImpl.JVMClassName,
+					"or", cop5555fa13.runtime.BooleanOperatorsImpl.orSig);
+			break;
+		case EQ:
+			String methodToBeCalled = "";
+			String methodSig = "";
+			// TypeCheckVisitor has ensured TypeOf(e0) = TypeOf(e1)
+			switch (binaryExpr.e0.type) {
+			case _int:
+				methodToBeCalled = "eqI";
+				methodSig = cop5555fa13.runtime.BooleanOperatorsImpl.eqISig;
+				break;
+			case _boolean:
+				methodToBeCalled = "eqB";
+				methodSig = cop5555fa13.runtime.BooleanOperatorsImpl.eqBSig;
+				break;
+			case image:
+				methodToBeCalled = "eqImage";
+				methodSig = cop5555fa13.runtime.BooleanOperatorsImpl.eqImageSig;
+				break;
+			}
+			mv.visitMethodInsn(INVOKESTATIC,
+					cop5555fa13.runtime.BooleanOperatorsImpl.JVMClassName,
+					methodToBeCalled, methodSig);
+			break;
+
+		case NEQ:
+			methodToBeCalled = "";
+			methodSig = "";
+			// TypeCheckVisitor has ensured TypeOf(e0) = TypeOf(e1)
+			switch (binaryExpr.e0.type) {
+			case _int:
+				methodToBeCalled = "neqI";
+				methodSig = cop5555fa13.runtime.BooleanOperatorsImpl.neqISig;
+				break;
+			case _boolean:
+				methodToBeCalled = "neqB";
+				methodSig = cop5555fa13.runtime.BooleanOperatorsImpl.neqBSig;
+				break;
+			case image:
+				methodToBeCalled = "neqImage";
+				methodSig = cop5555fa13.runtime.BooleanOperatorsImpl.neqImageSig;
+				break;
+			}
+			mv.visitMethodInsn(INVOKESTATIC,
+					cop5555fa13.runtime.BooleanOperatorsImpl.JVMClassName,
+					methodToBeCalled, methodSig);
+			break;
+		// LT, GT, LEQ, GEQ are only for 'int' operands.
+		case LT:
+			mv.visitMethodInsn(INVOKESTATIC,
+					cop5555fa13.runtime.BooleanOperatorsImpl.JVMClassName,
+					"lt", cop5555fa13.runtime.BooleanOperatorsImpl.ltSig);
+			break;
+		case GT:
+			mv.visitMethodInsn(INVOKESTATIC,
+					cop5555fa13.runtime.BooleanOperatorsImpl.JVMClassName,
+					"gt", cop5555fa13.runtime.BooleanOperatorsImpl.gtSig);
+			break;
+		case LEQ:
+			mv.visitMethodInsn(INVOKESTATIC,
+					cop5555fa13.runtime.BooleanOperatorsImpl.JVMClassName,
+					"ltEq", cop5555fa13.runtime.BooleanOperatorsImpl.ltEqSig);
+			break;
+		case GEQ:
+			mv.visitMethodInsn(INVOKESTATIC,
+					cop5555fa13.runtime.BooleanOperatorsImpl.JVMClassName,
+					"gtEq", cop5555fa13.runtime.BooleanOperatorsImpl.gtEqSig);
+			break;
+
 		}
 		return null;
 	}
@@ -528,12 +776,26 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 		// x | y | Z | SCREEN_SIZE
 		MethodVisitor mv = (MethodVisitor) arg;
 
-		// Yet to implement the conditions for 'x' and 'y'
-		if (PreDefExpr.constantLit.kind == Z) {
+		switch (PreDefExpr.constantLit.kind) {
+		case Z:
 			mv.visitLdcInsn(ImageConstants.Z);
-		} else if (PreDefExpr.constantLit.kind == SCREEN_SIZE) {
+			break;
+		case SCREEN_SIZE:
 			mv.visitLdcInsn(PLPImage.SCREENSIZE);
+			break;
+		case x:
+			mv.visitVarInsn(ILOAD, 1);
+			break;
+		case y:
+			mv.visitVarInsn(ILOAD, 2);
+			break;
 		}
+		// Yet to implement the conditions for 'x' and 'y'
+		// if (PreDefExpr.constantLit.kind == Z) {
+		// mv.visitLdcInsn(ImageConstants.Z);
+		// } else if (PreDefExpr.constantLit.kind == SCREEN_SIZE) {
+		// mv.visitLdcInsn(PLPImage.SCREENSIZE);
+		// }
 		return null;
 	}
 
@@ -545,7 +807,7 @@ public class CodeGenVisitor implements ASTVisitor, Opcodes {
 		// Step 1: Evaluate the expr and leave it's value on top of the stack.
 		assignExprStmt.expr.visit(this, mv);
 
-		// Step 2: Set IDENT's value to the value on the stack's top.
+		// Step 2: Set IDENT's value to be the value on the stack's top.
 		String varName = assignExprStmt.lhsIdent.getText();
 		mv.visitFieldInsn(PUTSTATIC, progName, varName, varTypeMap.get(varName));
 
