@@ -1,0 +1,15 @@
+Implemented type checking for the image-processing language as specified in the attached document 'TypeRulesV2.pdf'. 
+That is, implemented the ASTVisitor interface.
+
+When an error is discovered, the node currently being checked (i.e. if an error is detected in method visitX, the current X node is added to the error NodeList), and a useful error message are appended to the errorLog. 
+
+Assuming that prog is an AST of a correct program from the Parser, the following code fragment would result in type checking.
+
+TypeCheckVisitor v = new TypeCheckVisitor();
+prog.visit(v, null);
+if (!v.isCorrect()) {
+	System.out.println(v.getLog());
+	//we’re done with this program, exit or do something else sensible
+}
+else //program is correct
+	go on to code gen (in Projects 5 and 6)
