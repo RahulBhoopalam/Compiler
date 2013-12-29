@@ -8,8 +8,8 @@ public class Program extends ASTNode {
 	
 	
     public final Token ident;
-    public final List<Stmt> stmtList;
     public final List<Dec> decList;
+    public final List<Stmt> stmtList;
 
     public Program(Token ident, 
     		List<Dec> decList, 

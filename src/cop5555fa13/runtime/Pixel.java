@@ -6,6 +6,26 @@ package cop5555fa13.runtime;
  */
 public class Pixel implements ImageConstants {
 
+	/******************************************************************/
+	/**                    Test specific methods                     **/
+	/******************************************************************/
+	public static boolean calledMakePixel = false;
+	public static int makePixelR = -1;
+	public static int makePixelG = -1;
+	public static int makePixelB = -1;
+
+	public static void resetTestVars(){
+		calledMakePixel = false;
+		makePixelR = -1;
+		makePixelG = -1;
+		makePixelB = -1;
+	}
+	
+	/******************************************************************/
+	/**               End of Test specific methods                   **/
+	/******************************************************************/
+	
+	
 	public static final String JVMClassName = "cop5555fa13/runtime/Pixel";
 
 	public static final String getSampleSig = "(II)I";
@@ -72,6 +92,11 @@ public class Pixel implements ImageConstants {
 	 * @return pixel containing given colof values
 	 */
 	public static int makePixel(int redVal, int grnVal, int bluVal) {
+		calledMakePixel = true;
+		makePixelR = redVal;
+		makePixelG = grnVal;
+		makePixelB = bluVal;
+		
 		int maxUnsigned = 0xffffffff;
 		if (((redVal | 0xff) == maxUnsigned)
 				&& ((grnVal | 0xff) == maxUnsigned)

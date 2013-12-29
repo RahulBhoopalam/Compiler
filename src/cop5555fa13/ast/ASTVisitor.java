@@ -2,7 +2,7 @@ package cop5555fa13.ast;
 
 public interface ASTVisitor {
 
-	Object visitDec(Dec dec, Object arg);
+	Object visitDec(Dec dec, Object arg) throws Exception;
 
 	Object visitProgram(Program program, Object arg) throws Exception;
 

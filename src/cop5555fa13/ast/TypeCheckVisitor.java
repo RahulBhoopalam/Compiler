@@ -6,7 +6,6 @@ import java.util.List;
 
 import static cop5555fa13.TokenStream.Kind.*;
 import cop5555fa13.TokenStream.Kind;
-import cop5555fa13.TokenStream.Token;
 
 // * A TypeCheckVisitor object visits each node in the AST and does type-checking. *
 // - It makes use of the 'symbolTable' to keep track of all declared variables.
@@ -24,7 +23,7 @@ public class TypeCheckVisitor implements ASTVisitor {
 		errorLog = new StringBuilder();
 	}
 
-	public List getErrorNodeList() {
+	public List<ASTNode> getErrorNodeList() {
 		return errorNodeList;
 	}
 
@@ -66,7 +65,7 @@ public class TypeCheckVisitor implements ASTVisitor {
 		checkConstraint(symbolTable.containsKey(identInDec) == false, dec, "' "
 				+ identInDec + " ' already declared.");
 		// Check that IDENT != programName
-		checkConstraint( !identInDec.equals(arg), dec, identInDec
+		checkConstraint(!identInDec.equals(arg), dec, identInDec
 				+ " cannot be the same as the program's name.");
 		// Add this IDENT to the symbolTable only if it hasn't been declared
 		// before.
@@ -135,11 +134,12 @@ public class TypeCheckVisitor implements ASTVisitor {
 	@Override
 	public Object visitAssignPixelStmt(AssignPixelStmt assignPixelStmt,
 			Object arg) throws Exception {
-		// Check that TypeOf(IDENT) = pixel
+		// Check that TypeOf(IDENT) = pixel or Image
 		checkConstraint(
-				lookupType(assignPixelStmt.lhsIdent.getText()) == pixel,
+				(lookupType(assignPixelStmt.lhsIdent.getText()) == pixel)
+						| (lookupType(assignPixelStmt.lhsIdent.getText()) == image),
 				assignPixelStmt, "' " + assignPixelStmt.lhsIdent.getText()
-						+ " ' must have type 'pixel'.");
+						+ " ' must have type 'pixel' or 'image'.");
 
 		assignPixelStmt.pixel.visit(this, null);
 		return null;
@@ -154,8 +154,8 @@ public class TypeCheckVisitor implements ASTVisitor {
 
 		// Check that TypeOf(GREEN_EXPR) = _int
 		Kind greenExprType = (Kind) pixel.greenExpr.visit(this, null);
-		checkConstraint(greenExprType == _int, pixel, "' "
-				+ pixel.greenExpr + " ' must evaluate to an 'int' value");
+		checkConstraint(greenExprType == _int, pixel, "' " + pixel.greenExpr
+				+ " ' must evaluate to an 'int' value");
 
 		// Check that TypeOf(BLUE_EXPR) = _int
 		Kind blueExprType = (Kind) pixel.blueExpr.visit(this, null);
@@ -263,7 +263,8 @@ public class TypeCheckVisitor implements ASTVisitor {
 		// Check that TypeOf(IDENT) = image
 		checkConstraint(
 				lookupType(shapeAssignmentStmt.lhsIdent.getText()) == image,
-				shapeAssignmentStmt, "' " + shapeAssignmentStmt.lhsIdent.getText()
+				shapeAssignmentStmt,
+				"' " + shapeAssignmentStmt.lhsIdent.getText()
 						+ " ' must have type 'image'");
 
 		// Check that TypeOf(WIDTH_EXPR) = _int

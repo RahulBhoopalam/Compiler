@@ -27,6 +27,55 @@ import javax.imageio.ImageIO;
  */
 public class PLPImage implements ImageConstants {
 	
+	/******************************************************************/
+	/**                    Test specific methods                     **/
+	/******************************************************************/
+	public static String loadImage = null;
+	public static int xloc = -1;
+	public static int yloc = -1;
+	public static Boolean calledUpdateFrame = false;
+	public static int swidth = -1;
+	public static int sheight = -1;
+	public static Boolean svisible = false;
+	public static Boolean calledUpdateImageSize = false;
+	public static Boolean calledSetPixel = false;
+	public static int calledSetPixelX = -1;
+	public static int calledSetPixelY = -1;
+	public static int calledSetPixelP = -1;
+	public static BufferedImage simage = null;
+	public static Boolean calledSetSample = false;
+	public static int calledSetSampleX = -1;
+	public static int calledSetSampleY = -1;
+	public static int calledSetSampleCC = -1;
+	public static int calledSetSampleV = -1;
+	public static int calledPause = -1;
+
+	public static void resetTestVars(){
+		loadImage = null;
+		xloc = -1;
+		yloc = -1;
+		calledUpdateFrame = null;
+		swidth = -1;
+		sheight = -1;
+		calledUpdateImageSize = null;
+		calledSetPixel = null;
+		calledSetPixelX = -1;
+		calledSetPixelY = -1;
+		calledSetPixelP = -1;
+		simage = null;
+		calledSetSample = null;
+		calledSetSampleX = -1;
+		calledSetSampleY = -1;
+		calledSetSampleCC = -1;
+		calledSetSampleV = -1;
+		calledPause = -1;
+		svisible = null;
+	}
+	
+	/******************************************************************/
+	/**               End of Test specific methods                   **/
+	/******************************************************************/
+	
 	public static final String className = "cop5555fa13/runtime/PLPImage";
 	public static final String classDesc = "Lcop5555fa13/runtime/PLPImage;";
 	public static final String loadImageDesc = "(Ljava/lang/String;)V";
@@ -56,6 +105,9 @@ public class PLPImage implements ImageConstants {
 		SCREENSIZE = screen.width > screen.height ? screen.height
 				: screen.width;
 	}
+	
+	
+	
 
 	public PLPImage() {
 	}
@@ -74,6 +126,7 @@ public class PLPImage implements ImageConstants {
      * @param fileOrURL  File or URL of the image
      */
 	public final void loadImage(String fileOrURL) {
+		loadImage = fileOrURL;
 		try {
 			try {
 				image = ImageIO.read(new URL(fileOrURL));
@@ -98,9 +151,12 @@ public class PLPImage implements ImageConstants {
 	 * the image to synchronize the actual size with these values.
 	 */
 	public final void updateImageSize() {
+		calledUpdateImageSize = true;
+		swidth = width;
+		sheight = height;
 		if (image == null)
 			return;
-		if (width != image.getWidth() && height != image.getHeight()) {
+		if (width != image.getWidth() || height != image.getHeight()) {
 			image = getScaledImage(image, width, height);
 		}
 	}
@@ -110,12 +166,20 @@ public class PLPImage implements ImageConstants {
 	 * values in this PLPImage
 	 */
 	public final void updateFrame() {
+		xloc = x_loc;
+		yloc = y_loc;
+		calledUpdateFrame = true;
+		simage = this.image;
+		svisible = isVisible;
+		
 		if (frame == null) {
 			if (!isVisible)
 				return;
 			frame = PLPFrame.createFrame(this);
 		} else
 			frame.update();
+		
+		
 	}
 
 	/**
@@ -200,9 +264,18 @@ public class PLPImage implements ImageConstants {
 	 * @param val
 	 */
 	public void setSample(int x, int y, int colorCode, int val) {
+		
+		calledSetSample = true;
+		calledSetSampleX = x;
+		calledSetSampleY = y;
+		calledSetSampleCC = colorCode;
+		calledSetSampleV = val;
+		
 		int pixel = image.getRGB(x, y) & ZERO[colorCode]
 				| (Pixel.truncate(val) << BITOFFSETS[colorCode]);
 		image.setRGB(x, y, pixel);
+		
+		simage = image;
 	}
 
 	public int getX_loc() {
@@ -250,6 +323,11 @@ public class PLPImage implements ImageConstants {
 	 * @param newPixel
 	 */
 	public void setPixel(int x, int y, int newPixel) throws ImageException {
+		calledSetPixel = true;
+		calledSetPixelX = x;
+		calledSetPixelY = y;
+		calledSetPixelP = newPixel;
+		
 		if (image == null) {
 			if (width == 0 || height == 0)
 				throw new ImageException(
@@ -285,6 +363,8 @@ public class PLPImage implements ImageConstants {
 	
 	public static final String pauseDesc = "(I)V";
 	public static void pause(int msec){
+		calledPause = msec;
+		
 		try {
 			Thread.sleep(msec);
 		} catch (InterruptedException e) {

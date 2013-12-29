@@ -88,9 +88,9 @@ public class PLPFrame extends JFrame {
 		h = h + insets.top + insets.bottom;
 		setSize(w, h);
 		icon.setImage(im.image);
-		validate();
+		revalidate();
+		setLocation(im.x_loc, im.y_loc);		
 		repaint();
-		setLocation(im.x_loc, im.y_loc);
 		setVisible(im.isVisible);
 	}
 
@@ -103,17 +103,25 @@ public class PLPFrame extends JFrame {
 	 * 
 	 * @param im
 	 */
+//	public final void update() {
+//		try {
+//			SwingUtilities.invokeAndWait(new Runnable() {
+//				public void run() {
+//					updateFrameState();
+//				}
+//			});
+//		} catch (InvocationTargetException | InterruptedException e) {
+//			// This shouldn't happen.  If it does, print stack trace and continue with undefined behavior.
+//			e.printStackTrace();
+//		}
+//	}
+	
 	public final void update() {
-		try {
-			SwingUtilities.invokeAndWait(new Runnable() {
-				public void run() {
-					updateFrameState();
-				}
-			});
-		} catch (InvocationTargetException | InterruptedException e) {
-			// This shouldn't happen.  If it does, print stack trace and continue with undefined behavior.
-			e.printStackTrace();
+	SwingUtilities.invokeLater(new Runnable() {
+		public void run() {
+			updateFrameState();
 		}
-	}
+	});
+}	
 
 }

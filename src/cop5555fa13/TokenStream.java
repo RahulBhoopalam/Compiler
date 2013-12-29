@@ -146,7 +146,7 @@ public class TokenStream{
 		_if, _else, 
 		/* int_literal ::= 0 |  ( (1..9) (0..9)*  ) */
 		INT_LIT,
-		/* string_literal ∷= “ NOT(“)* “ */
+		/* string_literal âˆ·= â€œ NOT(â€œ)* â€œ */
 		STRING_LIT,
 		/*boolean_literal := true | false*/
 		BOOLEAN_LIT,
@@ -226,7 +226,7 @@ public class TokenStream{
 
 		public String toString() {
 			return (new StringBuilder("<").append(kind).append(",")
-					.append(getText()).append(beg).append(",")
+					.append(getText()).append(",").append(beg).append(",")
 					.append(end).append(">")).toString();
 		}
 		
