@@ -1,0 +1,9 @@
+Implemented a Scanner for the attached lexical specification.
+
+The basic idea is that TokenStream class is initialized with char array containing the input characters. It also contains two initially empty Token lists: 'tokens' and 'comments'. My Scanner takes a TokenStream instance and scans its input characters, inserts Token objects into the 'tokens' list. Comments are also put in tokens of kind COMMENT, and these are inserted into the 'comments' list. The Token class is an inner class of the TokenStream class.
+
+The TokenStream class along with two inner classes Token and LexicalException were provided. For convenience, the TokenStream class has several constructors that get the input from different sources. 
+
+Using the given Scanner class as a starting point, added additional methods and fields as required. 
+
+The response to an error during scanning would be to throw a LexicalException.
