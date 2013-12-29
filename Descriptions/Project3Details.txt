@@ -1,0 +1,13 @@
+Renamed SimpleParser.java to Parser.java and modified it to
+a. generate an AST
+
+i. Copying the classes for the AST nodes that have been provided. 
+ii. Referred to 'ASTDef.pdf' for the mapping between the concrete syntax and AST nodes.
+
+b. implement rudimentary error recovery
+
+i. Error recovery had been implemented already for declarations in the provided ParserExample file. 
+
+-> Implemented a similar facility for statements. 
+-> Implemented error recover at the top level and inside language constructs (while loops and if statements) that include lists of statements.
+-> Parser.java contains the public methods found in the provided ParserExample file with the given signatures.
