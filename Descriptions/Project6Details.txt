@@ -1,0 +1,5 @@
+Finished the implementation of code generation for the compiler as indicated in the attached document 'CodeGenComplete.pdf'.
+
+Note: Java 7 introduced a new feature (which was optional in Java 6) called stack map frame which requires the class file to contain detailed type information about the contents of the local variables and stack at each branch target. If one looks at the byte code for a typical java 7 class file, he/she will probably see FRAME instructions—which record this information. Project 5 did not require to deal with this problem because the parts of the image-processing language that needed branching was not implemented yet. For Project 6, this feature will be ignored but in order for the code to pass bytecode verification without correct stack map frames, one needs to execute their programs with the following JVM argument:
+
+-XX:-UseSplitVerifier
