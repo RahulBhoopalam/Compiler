@@ -1,8 +1,10 @@
 package cop5555fa13;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 
 import javax.print.DocFlavor.STRING;
 import javax.swing.text.StyledEditorKit.StyledTextAction;
@@ -10,9 +12,33 @@ import javax.swing.text.StyledEditorKit.StyledTextAction;
 import cop5555fa13.TokenStream;
 import cop5555fa13.TokenStream.Token;
 import cop5555fa13.TokenStream.Kind;
+import cop5555fa13.ast.AlternativeStmt;
+import cop5555fa13.ast.AssignExprStmt;
+import cop5555fa13.ast.AssignPixelStmt;
+import cop5555fa13.ast.BinaryExpr;
+import cop5555fa13.ast.BooleanLitExpr;
+import cop5555fa13.ast.ConditionalExpr;
+import cop5555fa13.ast.Dec;
+import cop5555fa13.ast.Expr;
+import cop5555fa13.ast.FileAssignStmt;
+import cop5555fa13.ast.IdentExpr;
+import cop5555fa13.ast.ImageAttributeExpr;
+import cop5555fa13.ast.IntLitExpr;
+import cop5555fa13.ast.IterationStmt;
+import cop5555fa13.ast.PauseStmt;
+import cop5555fa13.ast.Pixel;
+import cop5555fa13.ast.PreDefExpr;
+import cop5555fa13.ast.Program;
+import cop5555fa13.ast.SampleExpr;
+import cop5555fa13.ast.ScreenLocationAssignmentStmt;
+import cop5555fa13.ast.SetVisibleAssignmentStmt;
+import cop5555fa13.ast.ShapeAssignmentStmt;
+import cop5555fa13.ast.SinglePixelAssignmentStmt;
+import cop5555fa13.ast.SingleSampleAssignmentStmt;
+import cop5555fa13.ast.Stmt;
 import static cop5555fa13.TokenStream.Kind.*;
 
-public class SimpleParser {
+public class Parser {
 
 	@SuppressWarnings("serial")
 	public class SyntaxException extends Exception {
@@ -33,6 +59,10 @@ public class SimpleParser {
 	}
 
 	TokenStream stream;
+	Token progName; // keep the program name in case you don't generate
+					// an AST
+	List<SyntaxException> errorList; // save the error for grading
+										// purposes
 
 	/* You will need additional fields */
 	int scannedTillThisIndex;
@@ -44,11 +74,20 @@ public class SimpleParser {
 	 * @param initialized_stream
 	 *            a TokenStream that has already been initialized by the Scanner
 	 */
-	public SimpleParser(TokenStream initialized_stream) {
+	public Parser(TokenStream initialized_stream) {
 		this.stream = initialized_stream;
 		/* You probably want to do more here */
 		scannedTillThisIndex = 0;
 		currentToken = stream.getToken(scannedTillThisIndex);
+		errorList = new ArrayList<SyntaxException>();
+	}
+
+	public List<SyntaxException> getErrorList() {
+		return errorList;
+	}
+
+	public String getProgName() {
+		return (progName != null ? progName.getText() : "no program name");
 	}
 
 	/*
@@ -59,18 +98,23 @@ public class SimpleParser {
 	 * contents of your error message will not be graded, but the "kind" of the
 	 * token will be.
 	 */
-	public void parse() throws SyntaxException {
+	public Program parse() {
 		/* You definitely need to do more here */
-		program();
-		if (isKind(currentToken, EOF)) {
-			// System.out.println("The input had " + stream.tokens.size() +
-			// " tokens.");
-			// System.out.println("The parser has parsed till the index : " +
-			// scannedTillThisIndex + ". [Note: Index begins from zero]");
-			return;
-		} else
-			throw new SyntaxException(currentToken, "An " + EOF
-					+ " was expected here.");
+		Program p = null;
+		try {
+			p = program();
+			if (!isKind(currentToken, EOF)) {
+				throw new SyntaxException(currentToken, "An " + EOF
+						+ " was expected here.");
+			}
+		} catch (SyntaxException e) {
+			errorList.add(e);
+		}
+		// if (errorList.isEmpty()) {
+		// return p;
+		// } else
+		// return null;
+		return p;
 	}
 
 	/* You will need to add more methods */
@@ -94,10 +138,14 @@ public class SimpleParser {
 		currentToken = stream.getToken(++scannedTillThisIndex);
 	}
 
-	private void match(Kind... kinds) throws SyntaxException {
+	// Matches the 'kind' of currentToken with the 'kinds' passed as arg
+	// Returns ON SUCCESS -> the 'matched' token if matched
+	// ON FAILURE -> throws a SyntaxException
+	private Token match(Kind... kinds) throws SyntaxException {
 		if (isKind(currentToken, kinds)) {
+			Token toBeReturned = currentToken;
 			consume();
-			return;
+			return toBeReturned;
 		}
 		// This token did not match any kind in 'kinds'
 		if (kinds.length > 1) {
@@ -108,49 +156,107 @@ public class SimpleParser {
 					+ " was expected here.");
 	}
 
-	private void program() throws SyntaxException {
-		match(IDENT);
+	// Program ::= IDENT { Dec* Stmt* }
+	private Program program() throws SyntaxException {
+		Program program = null;
+		progName = match(IDENT);
 		match(LBRACE);
 
 		// dec* . So check for FIRST(dec) = {image, pixel, int, boolean}
+		List<Dec> decList = new ArrayList<Dec>();
 		while (isKind(currentToken, image, pixel, _int, _boolean)) {
-			dec();
+			try {
+				decList.add(dec());
+			} catch (SyntaxException e) {
+				errorList.add(e);
+				// skip tokens until next SEMI,
+				// consume it, then continue parsing
+				while (!isKind(currentToken, SEMI, image, _int, _boolean, pixel, EOF)) {
+					consume();
+				}
+				if (isKind(currentToken, SEMI)) {
+					consume();
+				} // if a SEMI, consume it before continuing
+			}
 		}
 
 		// Stmt*. So check for FIRST(Stmt) = { ;, IDENT, pause, _while, _if }
+		List<Stmt> stmtList = new ArrayList<Stmt>();
 		while (isKind(currentToken, SEMI, IDENT, pause, _while, _if)) {
-			stmt();
+			try {
+				Stmt stmt = stmt();
+				// If there are dangling semi-colons like ;;;;; then stmt()
+				// would return null. Don't add such statements to the list.
+				if (stmt != null)
+					stmtList.add(stmt);
+			} catch (SyntaxException e) {
+				errorList.add(e);
+				// skip tokens until next SEMI,
+				// consume it, then continue parsing
+				while (!isKind(currentToken, SEMI, /*IDENT,*/ pause, _while, _if,
+						EOF)) {
+					consume();
+				}
+				if (isKind(currentToken, SEMI)) {
+					consume();
+				} // if a SEMI, consume it before continuing
+			}
 		}
 
 		match(RBRACE);
+
+		// Parsing has finished.
+		// if there were no errors, create and return a Program node, which is
+		// the AST of the program
+		if (errorList.isEmpty()) {
+			program = new Program(progName, decList, stmtList);
+		} else {
+			// There were some errors. So print them and return null
+			System.out.println("Error" + (errorList.size() > 1 ? "s" : "")
+					+ " parsing the program " + "'" + getProgName() + "'.");
+			for (SyntaxException e : errorList) {
+				// System.out.println(e.getMessage() + " at line "
+				// + e.t.getLineNumber());
+				System.out.println("Line " + e.t.getLineNumber() + ": "
+						+ e.getMessage());
+			}
+		}
+		return program;
 	}
 
-	private void dec() throws SyntaxException {
-		type();
-		match(IDENT);
+	private Dec dec() throws SyntaxException {
+		Dec toBeReturned = null;
+		Kind type = type();
+		if (isKind(currentToken, IDENT)) {
+			Token ident = currentToken;
+		}
+		Token ident = match(IDENT);
 		match(SEMI);
+		toBeReturned = new Dec(type, ident);
+		return toBeReturned;
 	}
 
-	private void type() throws SyntaxException {
-		match(image, pixel, _int, _boolean);
+	private Kind type() throws SyntaxException {
+		return match(image, pixel, _int, _boolean).kind;
 	}
 
-	private void stmt() throws SyntaxException {
+	private Stmt stmt() throws SyntaxException {
+		Stmt toBeReturned = null;
 		// AssignStmt. So check for FIRST(AssignStmt) = {IDENT}
 		if (isKind(currentToken, IDENT)) {
-			assignStmt();
+			toBeReturned = assignStmt();
 		}
 		// PauseStmt. So check for FIRST(PauseStmt) = {pause}
 		else if (isKind(currentToken, pause)) {
-			pauseStmt();
+			toBeReturned = pauseStmt();
 		}
 		// IterationStmt. So check for FIRST(IterationStmt) = {while}
 		else if (isKind(currentToken, _while)) {
-			iterationStmt();
+			toBeReturned = iterationStmt();
 		}
 		// AlternativeStmt. So check for FIRST(AlternativeStmt) = {if}
 		else if (isKind(currentToken, _if)) {
-			alternativeStmt();
+			toBeReturned = alternativeStmt();
 		} else if (isKind(currentToken, SEMI)) {
 			consume();
 		} else {
@@ -158,24 +264,37 @@ public class SimpleParser {
 					+ Arrays.asList(SEMI, IDENT, pause, _while, _if)
 					+ " was expected here.");
 		}
+		return toBeReturned;
 	}
 
-	private void assignStmt() throws SyntaxException {
+	// AssignStmt ::= IDENT ( = ( Expr | Pixel | STRING_LIT ) )
+	// | ( . ( pixels [ Expr , Expr ] ( = Pixel ) |
+	// ( (red | green | blue ) = Expr ) )
+	// | ( ( shape | location ) = [ Expr , Expr ] )
+	// | ( visible = Expr )) ;
+	private Stmt assignStmt() throws SyntaxException {
+		Stmt toBeReturned = null;
 		if (isKind(currentToken, IDENT)) {
+			Token lhsIdent = currentToken;
 			consume();
 			if (isKind(currentToken, ASSIGN)) {
 				consume();
-				if (isKind(currentToken, STRING_LIT))
+				if (isKind(currentToken, STRING_LIT)) {
+					Token fileName = currentToken;
 					consume();
+					toBeReturned = new FileAssignStmt(lhsIdent, fileName);
+				}
 				// expr. So check for FIRST(expr)
 				// = { IDENT, INT_LIT, BOOLEAN_LIT, x, y, Z, SCREEN_SIZE, ( }
 				else if (isKind(currentToken, IDENT, INT_LIT, BOOLEAN_LIT, x,
 						y, Z, SCREEN_SIZE, LPAREN)) {
-					expr();
+					Expr expr = expr();
+					toBeReturned = new AssignExprStmt(lhsIdent, expr);
 				}
 				// pixel. So check for FIRST(pixel) = { { }
 				else if (isKind(currentToken, LBRACE)) {
-					pixel();
+					Pixel pixel = pixel();
+					toBeReturned = new AssignPixelStmt(lhsIdent, pixel);
 				}
 				match(SEMI);
 			} else if (isKind(currentToken, DOT)) {
@@ -183,17 +302,22 @@ public class SimpleParser {
 				if (isKind(currentToken, pixels)) {
 					consume();
 					match(LSQUARE);
-					expr();
+					Expr xExpr = expr();
 					match(COMMA);
-					expr();
+					Expr yExpr = expr();
 					match(RSQUARE);
 					if (isKind(currentToken, ASSIGN)) {
 						consume();
-						pixel();
+						Pixel pixel = pixel();
+						toBeReturned = new SinglePixelAssignmentStmt(lhsIdent,
+								xExpr, yExpr, pixel);
 					} else if (isKind(currentToken, red, green, blue)) {
+						Token color = currentToken;
 						consume();
 						match(ASSIGN);
-						expr();
+						Expr rhsExpr = expr();
+						toBeReturned = new SingleSampleAssignmentStmt(lhsIdent,
+								xExpr, yExpr, color, rhsExpr);
 					} else {
 						throw new SyntaxException(currentToken,
 								"One of these tokens: "
@@ -201,17 +325,25 @@ public class SimpleParser {
 												blue) + " was expected.");
 					}
 				} else if (isKind(currentToken, shape, location)) {
+					boolean isShapeAssignment = isKind(currentToken, shape);
 					consume();
 					match(ASSIGN);
 					match(LSQUARE);
-					expr();
+					Expr e0 = expr();
 					match(COMMA);
-					expr();
+					Expr e1 = expr();
 					match(RSQUARE);
+					if (isShapeAssignment) {
+						toBeReturned = new ShapeAssignmentStmt(lhsIdent, e0, e1);
+					} else {
+						toBeReturned = new ScreenLocationAssignmentStmt(
+								lhsIdent, e0, e1);
+					}
 				} else if (isKind(currentToken, visible)) {
 					consume();
 					match(ASSIGN);
-					expr();
+					Expr expr = expr();
+					toBeReturned = new SetVisibleAssignmentStmt(lhsIdent, expr);
 				}
 				match(SEMI);
 			} else {
@@ -222,183 +354,336 @@ public class SimpleParser {
 			throw new SyntaxException(currentToken, "" + IDENT
 					+ " was expected here.");
 		}
+		return toBeReturned;
 	}
 
-	private void pixel() throws SyntaxException {
+	private Pixel pixel() throws SyntaxException {
 		if (isKind(currentToken, LBRACE)) {
 			consume();
 			match(LBRACE);
-			expr();
+			Expr redExpr = expr();
 			match(COMMA);
-			expr();
+			Expr greenExpr = expr();
 			match(COMMA);
-			expr();
+			Expr blueExpr = expr();
 			match(RBRACE);
 			match(RBRACE);
+			return new Pixel(redExpr, greenExpr, blueExpr);
 		} else {
 			throw new SyntaxException(currentToken, "" + LBRACE
 					+ " was expected here.");
 		}
 	}
 
-	private void expr() throws SyntaxException {
-		orExpr();
-
+	private Expr expr() throws SyntaxException {
+		Expr trueValue = null;
+		Expr falseValue = null;
+		Expr condition = orExpr();
 		if (isKind(currentToken, QUESTION)) {
 			consume();
-			expr();
+			trueValue = expr();
 			match(COLON);
-			expr();
+			falseValue = expr();
 		} else {
 			// Do Nothing -> consume epsilon
+			return condition;
 		}
+		return new ConditionalExpr(condition, trueValue, falseValue);
 	}
 
-	private void orExpr() throws SyntaxException {
-		andExpr();
+	private Expr orExpr() throws SyntaxException {
+		Expr e0 = null;
+		Expr e1 = null;
+		e0 = andExpr();
 
 		while (isKind(currentToken, OR)) {
+			Token op = currentToken;
 			consume();
-			andExpr();
+			e1 = andExpr();
+			e0 = new BinaryExpr(e0, op, e1);
 		}
+		return e0;
 	}
 
-	private void andExpr() throws SyntaxException {
-		equalityExpr();
+	private Expr andExpr() throws SyntaxException {
+		Expr e0 = null;
+		Expr e1 = null;
+		e0 = equalityExpr();
 
 		while (isKind(currentToken, AND)) {
+			Token op = currentToken;
 			consume();
-			equalityExpr();
+			e1 = equalityExpr();
+			e0 = new BinaryExpr(e0, op, e1);
 		}
+		return e0;
 	}
 
-	private void equalityExpr() throws SyntaxException {
-		relExpr();
+	private Expr equalityExpr() throws SyntaxException {
+		Expr e0 = null;
+		Expr e1 = null;
+		e0 = relExpr();
 
 		while (isKind(currentToken, EQ, NEQ)) {
+			Token op = currentToken;
 			consume();
-			relExpr();
+			e1 = relExpr();
+			e0 = new BinaryExpr(e0, op, e1);
 		}
+		return e0;
 	}
 
-	private void relExpr() throws SyntaxException {
-		shiftExpr();
+	private Expr relExpr() throws SyntaxException {
+		Expr e0 = null;
+		Expr e1 = null;
+		e0 = shiftExpr();
 
 		while (isKind(currentToken, LT, GT, LEQ, GEQ)) {
+			Token op = currentToken;
 			consume();
-			shiftExpr();
+			e1 = shiftExpr();
+			e0 = new BinaryExpr(e0, op, e1);
 		}
+		return e0;
 	}
 
-	private void shiftExpr() throws SyntaxException {
-		addExpr();
+	private Expr shiftExpr() throws SyntaxException {
+		Expr e0 = null;
+		Expr e1 = null;
+		e0 = addExpr();
 
 		while (isKind(currentToken, LSHIFT, RSHIFT)) {
+			Token op = currentToken;
 			consume();
-			addExpr();
+			e1 = addExpr();
+			e0 = new BinaryExpr(e0, op, e1);
 		}
+		return e0;
 	}
 
-	private void addExpr() throws SyntaxException {
-		multExpr();
+	private Expr addExpr() throws SyntaxException {
+		Expr e0 = null;
+		Expr e1 = null;
+		e0 = multExpr();
 
 		while (isKind(currentToken, PLUS, MINUS)) {
+			Token op = currentToken;
 			consume();
-			multExpr();
+			e1 = multExpr();
+			e0 = new BinaryExpr(e0, op, e1);
 		}
+		return e0;
 	}
 
-	private void multExpr() throws SyntaxException {
-		primaryExpr();
+	private Expr multExpr() throws SyntaxException {
+		Expr e0 = null;
+		Expr e1 = null;
+		e0 = primaryExpr();
 
 		while (isKind(currentToken, TIMES, DIV, MOD)) {
+			Token op = currentToken;
 			consume();
-			primaryExpr();
+			e1 = primaryExpr();
+			e0 = new BinaryExpr(e0, op, e1);
 		}
+		return e0;
 	}
 
-	private void primaryExpr() throws SyntaxException {
-		if (isKind(currentToken, INT_LIT, BOOLEAN_LIT, x, y, Z, SCREEN_SIZE))
+	// PrimaryExpr ::= INT_LIT | BOOLEAN_LIT | x | y | Z | SCREEN_SIZE
+	// | ( Expr ) | IDENT ( epsilon |
+	// ( [ Expr , Expr ] (red | green | blue ) )
+	// | ( . ( height | width | x_loc | y_loc ) ) )
+	private Expr primaryExpr() throws SyntaxException {
+		Expr e = null; // The Expr object that is to be returned
+
+		if (isKind(currentToken, INT_LIT, BOOLEAN_LIT, x, y, Z, SCREEN_SIZE)) {
+			switch (currentToken.kind) {
+			case INT_LIT:
+				e = new IntLitExpr(currentToken);
+				break;
+			case BOOLEAN_LIT:
+				e = new BooleanLitExpr(currentToken);
+				break;
+			case x:
+			case y:
+			case Z:
+			case SCREEN_SIZE:
+				e = new PreDefExpr(currentToken);
+				break;
+			}
 			consume();
-		else if (isKind(currentToken, LPAREN)) {
+		} else if (isKind(currentToken, LPAREN)) {
 			consume();
-			expr();
+			e = expr();
 			match(RPAREN);
 		} else if (isKind(currentToken, IDENT)) {
+			Token ident = currentToken;
 			consume();
 			if (isKind(currentToken, LSQUARE)) {
 				consume();
-				expr();
+				Expr xLoc = expr();
 				match(COMMA);
-				expr();
+				Expr yLoc = expr();
 				match(RSQUARE);
+
+				Token color = null;
+				switch (currentToken.kind) {
+				case red:
+				case green:
+				case blue:
+					color = currentToken;
+					break;
+				}
 				match(red, green, blue);
+				e = new SampleExpr(ident, xLoc, yLoc, color);
 			} else if (isKind(currentToken, DOT)) {
 				consume();
+				Token selector = null;
+				switch (currentToken.kind) {
+				case height:
+				case width:
+				case x_loc:
+				case y_loc:
+					selector = currentToken;
+					break;
+				}
 				match(height, width, x_loc, y_loc);
+				e = new ImageAttributeExpr(ident, selector);
+			} else {
+				// Do Nothing -> consume epsilon
+				e = new IdentExpr(ident);
 			}
 		} else {
 			throw new SyntaxException(currentToken, "Either of "
 					+ Arrays.asList(INT_LIT, BOOLEAN_LIT, x, y, Z, SCREEN_SIZE,
 							LPAREN, IDENT, DOT) + " was expected here.");
 		}
+		return e;
 	}
 
-	private void pauseStmt() throws SyntaxException {
+	private Stmt pauseStmt() throws SyntaxException {
+		Stmt toBeReturned = null;
 		if (isKind(currentToken, pause)) {
 			consume();
-			expr();
+			Expr expr = expr();
 			match(SEMI);
-		} else
+			toBeReturned = new PauseStmt(expr);
+		} else {
 			throw new SyntaxException(currentToken, "" + pause
 					+ " was expected here.");
+		}
+		return toBeReturned;
 	}
 
-	private void iterationStmt() throws SyntaxException {
+	private Stmt iterationStmt() throws SyntaxException {
+		Stmt toBeReturned = null;
 		if (isKind(currentToken, _while)) {
 			consume();
 			match(LPAREN);
-			expr();
+			Expr expr = expr();
 			match(RPAREN);
 
 			match(LBRACE);
-			// Stmt*. So check for FIRST(Stmt) = { ;, IDENT, pause, _while, _if
-			// }
+			ArrayList<Stmt> stmtList = new ArrayList<Stmt>();
+			// Stmt*. So check for
+			// FIRST(Stmt) = { ;, IDENT, pause, _while, _if }
 			while (isKind(currentToken, SEMI, IDENT, pause, _while, _if)) {
-				stmt();
+				try {
+					Stmt stmt = stmt();
+					// If there are dangling semi-colons like ;;;;; then stmt()
+					// would return null. Don't add such statements to the list.
+					if (stmt != null)
+						stmtList.add(stmt);
+				} catch (SyntaxException e) {
+					errorList.add(e);
+					// skip tokens until next SEMI,
+					// consume it, then continue parsing
+					while (!isKind(currentToken, SEMI, /*IDENT,*/ pause, _while,
+							_if, EOF)) {
+						consume();
+					}
+					if (isKind(currentToken, SEMI)) {
+						consume();
+					} // if a SEMI, consume it before continuing
+				}
 			}
 			match(RBRACE);
+			toBeReturned = new IterationStmt(expr, stmtList);
 		}
+		return toBeReturned;
 	}
 
-	private void alternativeStmt() throws SyntaxException {
+	// AlternativeStmt ::== if ( Expr ) { Stmt* } ( epsilon | else { Stmt* } )
+	private Stmt alternativeStmt() throws SyntaxException {
+		Stmt toBeReturned = null;
+		Expr expr = null;
+		List<Stmt> ifStmtList = new ArrayList<Stmt>();
+		List<Stmt> elseStmtList = new ArrayList<Stmt>();
+
 		if (isKind(currentToken, _if)) {
 			consume();
 			match(LPAREN);
-			expr();
+			expr = expr();
 			match(RPAREN);
 
 			match(LBRACE);
 			// Stmt*. So check for FIRST(Stmt) = {;, IDENT, pause, _while, _if}
 			while (isKind(currentToken, SEMI, IDENT, pause, _while, _if)) {
-				stmt();
+				try {
+					Stmt stmt = stmt();
+					// If there are dangling semi-colons like ;;;;; then stmt()
+					// would return null. Don't add such statements to the list.
+					if (stmt != null)
+						ifStmtList.add(stmt);
+				} catch (SyntaxException e) {
+					errorList.add(e);
+					// skip tokens until next SEMI,
+					// consume it, then continue parsing
+					while (!isKind(currentToken, SEMI, /*IDENT,*/ pause, _while,
+							_if, EOF)) {
+						consume();
+					}
+					if (isKind(currentToken, SEMI)) {
+						consume();
+					} // if a SEMI, consume it before continuing
+				}
 			}
 			match(RBRACE);
-		} else
+		} else {
 			throw new SyntaxException(currentToken, "" + _if
 					+ " was expected here.");
+		}
 
 		if (isKind(currentToken, _else)) {
 			consume();
 			match(LBRACE);
 			// Stmt*. So check for FIRST(Stmt) = {;, IDENT, pause, _while, _if}
 			while (isKind(currentToken, SEMI, IDENT, pause, _while, _if)) {
-				stmt();
+				try {
+					Stmt stmt = stmt();
+					// If there are dangling semi-colons like ;;;;; then stmt()
+					// would return null. Don't add such statements to the list.
+					if (stmt != null)
+						elseStmtList.add(stmt);
+				} catch (SyntaxException e) {
+					errorList.add(e);
+					// skip tokens until next SEMI,
+					// consume it, then continue parsing
+					while (!isKind(currentToken, SEMI, /*IDENT,*/ pause, _while,
+							_if, EOF)) {
+						consume();
+					}
+					if (isKind(currentToken, SEMI)) {
+						consume();
+					} // if a SEMI, consume it before continuing
+				}
 			}
 			match(RBRACE);
 		} else {
 			// Do nothing - Accept epsilon
+			toBeReturned = new AlternativeStmt(expr, ifStmtList, elseStmtList);
 		}
+		return toBeReturned;
 	}
 
 }
