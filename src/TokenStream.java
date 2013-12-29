@@ -43,6 +43,7 @@ public class TokenStream{
 	 */
 	private int[] initLineBreaks() {
 		int[] tmp = new int[inputChars.length];
+		if(inputChars.length==0) return tmp;
 		tmp[0] = -1;
 		int lineCnt = 1;
 		char prev = 0;
@@ -225,7 +226,7 @@ public class TokenStream{
 
 		public String toString() {
 			return (new StringBuilder("<").append(kind).append(",")
-					.append(getText()).append(",").append(beg).append(",")
+					.append(getText()).append(beg).append(",")
 					.append(end).append(">")).toString();
 		}
 		

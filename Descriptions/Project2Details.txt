@@ -1,0 +1,5 @@
+Implemented a Recursive-Descent Parser for the attached grammar [PhraseStructureV2.pdf] using the given SimpleParser.java as a starting point. 
+
+'Scanner' recognizes tokens. 
+Errors detected while parsing throw a SyntaxException. 
+For the input that is allowed by the grammar, the parse() method simply returns normally.
