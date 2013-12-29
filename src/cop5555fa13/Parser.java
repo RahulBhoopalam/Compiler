@@ -679,10 +679,10 @@ public class Parser {
 				}
 			}
 			match(RBRACE);
-		} else {
+		} //else {
 			// Do nothing - Accept epsilon
-			toBeReturned = new AlternativeStmt(expr, ifStmtList, elseStmtList);
-		}
+//		}
+		toBeReturned = new AlternativeStmt(expr, ifStmtList, elseStmtList);
 		return toBeReturned;
 	}
 
